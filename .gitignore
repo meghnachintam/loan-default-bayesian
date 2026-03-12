@@ -36,4 +36,3 @@ htmlcov/
 # Project-specific artifacts
 logit_app_bundle.pkl
 BML_Credit_Project.ipynb
-loan_desktop_app.py

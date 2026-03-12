@@ -1,377 +1,237 @@
 # Bayesian Loan Default Risk Modeling
 
-## Streamlit deployment
+## Overview
 
-This repository is configured to deploy with **`streamlit_app.py` as the Streamlit entrypoint** (with `app.py` kept as a compatibility wrapper).
+This project studies mortgage-style loan default using a Bayesian modeling framework designed to produce both accurate probabilities and analyst-friendly explanations. The goal is not just binary classification. The goal is to estimate calibrated default risk, compare alternative Bayesian specifications, and translate the final model output into a narrative that explains why a borrower is being flagged as lower or higher risk.
 
-### Local run
+The modeling work compares three approaches:
 
-```bash
-pip install -r requirements.txt
-streamlit run streamlit_app.py
-```
+1. Bayesian logistic regression
+2. Hierarchical Bayesian logistic regression
+3. Bayesian generalized additive modeling (GAM)
 
-### Streamlit Community Cloud
+The final deliverable is a scoring workflow that combines preprocessing, posterior mean inference, risk banding, and a natural-language analyst response.
 
-- **Main file path:** `streamlit_app.py`
-- **Python runtime:** `python-3.11` (from `runtime.txt`)
-- Ensure `logit_app_bundle.pkl` is present in the repository root.
+## Business Framing
 
-## Use the uploaded `.pkl` model bundle for inference
+Loan default modeling is useful when credit teams need more than a yes or no answer. In practice, underwriting and risk management teams care about:
 
-If you already uploaded `logit_app_bundle.pkl`, you can score new records directly without re-training.
+- the estimated probability of default
+- whether that probability is well calibrated
+- which borrower and loan attributes are driving the result
+- whether the explanation is understandable enough for human review
 
-1. Create a JSON file with one record (object) or many records (array of objects).
-2. Run:
+This project is structured around those requirements. The chosen model therefore emphasizes probabilistic reliability and interpretability, not only raw classification performance.
 
-```bash
-python predict.py --bundle logit_app_bundle.pkl --input-json sample_input.json
-```
+## Dataset
 
-The script prints `default_probability` values (between 0 and 1) in JSON format.
+The dataset contains borrower- and loan-level variables typically used in mortgage underwriting and portfolio risk analysis. The target variable is `Status`, where:
 
-## Project Overview
+| Value | Meaning |
+| --- | --- |
+| `0` | Performing loan |
+| `1` | Defaulted loan |
 
-This project builds a **Bayesian machine learning pipeline to estimate loan default probability** using borrower financial characteristics and loan attributes. The objective is to generate **well-calibrated probabilistic risk estimates** and provide **interpretable explanations** that could support underwriting, portfolio monitoring, and credit risk management.
+### Core numeric predictors
 
-Rather than using traditional deterministic classification models, this project adopts a **Bayesian modeling framework**. Bayesian methods allow us to estimate uncertainty in model parameters and generate probability distributions over predicted risk, which is particularly valuable in financial decision-making.
+| Variable | Role in credit analysis |
+| --- | --- |
+| `loan_amount` | Exposure size and payment burden |
+| `rate_of_interest` | Loan pricing and monthly payment pressure |
+| `Credit_Score` | Borrower credit quality |
+| `LTV` | Leverage and borrower equity cushion |
+| `income` | Repayment capacity |
+| `dtir1` | Debt burden relative to income |
+| `Interest_rate_spread` | Relative pricing signal |
+| `Upfront_charges` | Additional financing cost |
+| `property_value` | Collateral scale and equity context |
+| `term` | Repayment horizon |
 
-Three Bayesian models are developed and compared:
+### Core categorical predictors
 
-1. **Bayesian Logistic Regression**
-2. **Hierarchical Bayesian Logistic Regression**
-3. **Bayesian Generalized Additive Model (GAM)**
+| Variable | Role in credit analysis |
+| --- | --- |
+| `loan_purpose` | Borrowing context |
+| `Region` | Geographic segmentation |
+| `Gender` | Historical segmentation in the source data |
+| `loan_type` | Product structure |
+| `occupancy_type` | Property usage / borrower incentive structure |
+| `credit_type` | Credit bureau / reporting segment |
+| `Security_Type` | Loan security classification |
+| `approv_in_adv` | Pre-approval signal |
+| `loan_limit` | Loan limit category |
+| `business_or_commercial` | Commercial vs non-commercial classification |
 
-Model performance is evaluated across multiple metrics, and the best-performing model is selected for deployment in an **analyst interpretation engine** that produces natural-language explanations for predicted default risk.
+## Exploratory Analysis
 
----
+The notebook begins with a basic audit of the source data: schema inspection, target distribution, missingness, univariate numeric distributions, categorical default-rate comparisons, and simple correlation review.
 
-# Dataset
+Several variables show moderate missingness, concentrated mostly in financial fields rather than the target:
 
-The dataset contains borrower and loan-level attributes commonly used in mortgage underwriting and credit risk modeling.
+| Variable | Approx. missing rate |
+| --- | --- |
+| `Upfront_charges` | 27% |
+| `Interest_rate_spread` | 25% |
+| `rate_of_interest` | 24% |
+| `dtir1` | 16% |
+| `property_value` | 10% |
+| `LTV` | 10% |
 
-### Target Variable
+That pattern matters because it argues for preprocessing instead of row deletion. Removing all incomplete records would unnecessarily shrink the dataset and potentially bias the sample toward cleaner applications.
 
-**Status**
+The EDA also showed the strongest practical relationships in the expected places:
 
-| Value | Meaning         |
-| ----- | --------------- |
-| 0     | Loan performing |
-| 1     | Loan default    |
+- higher interest rates aligned with higher default risk
+- very high LTV values showed a sharp increase in risk
+- higher debt-to-income ratios were associated with repayment stress
+- higher income generally reduced predicted risk
 
----
+These relationships make logistic-style models a strong baseline because the dominant signals are mostly monotonic and financially intuitive.
 
-## Numeric Features
+## Data Preparation
 
-These variables represent borrower financial strength and loan structure.
+The pipeline standardizes raw records before model estimation:
 
-| Variable             | Description                                     |
-| -------------------- | ----------------------------------------------- |
-| loan_amount          | Total loan size                                 |
-| rate_of_interest     | Interest rate applied to the loan               |
-| Credit_Score         | Borrower credit score                           |
-| LTV                  | Loan-to-value ratio                             |
-| income               | Borrower income                                 |
-| dtir1                | Debt-to-income ratio                            |
-| Interest_rate_spread | Difference between loan rate and reference rate |
-| Upfront_charges      | Upfront fees charged                            |
-| property_value       | Estimated property value                        |
-| term                 | Loan term length                                |
+1. String columns are trimmed and blank-like values are normalized to missing.
+2. Numeric columns are coerced to floats.
+3. The target is converted to a clean binary indicator.
+4. Rows with missing target values are dropped.
+5. The data is split into training, validation, and test sets.
 
-These variables capture **borrower creditworthiness, repayment capacity, leverage, and loan structure**, which are primary drivers of default risk.
+The preprocessing layer used for the logistic model is:
 
----
+- numeric imputation with median values
+- numeric standardization with `StandardScaler`
+- categorical imputation with a fallback category
+- one-hot encoding with `handle_unknown="ignore"`
 
-## Categorical Features
+This design is important for deployment because the exact same transformation logic can be reused for new borrower records without rebuilding the training notebook.
 
-Categorical variables capture loan structure, borrower attributes, and institutional features.
+## Modeling Strategy
 
-| Variable               | Description                            |
-| ---------------------- | -------------------------------------- |
-| loan_type              | Type of loan product                   |
-| occupancy_type         | Property occupancy classification      |
-| credit_type            | Credit reporting source                |
-| Gender                 | Borrower gender category               |
-| loan_purpose           | Purpose of the loan                    |
-| Region                 | Geographic region                      |
-| Security_Type          | Security classification                |
-| approv_in_adv          | Whether loan was pre-approved          |
-| loan_limit             | Loan limit classification              |
-| business_or_commercial | Business vs residential classification |
+### 1. Bayesian Logistic Regression
 
-These variables may capture **structural differences in underwriting, regional markets, and borrower behavior**.
+This is the core baseline:
 
----
+`P(default) = sigmoid(alpha + X beta)`
 
-# Exploratory Data Analysis
+Each coefficient is assigned a prior and estimated through posterior sampling. This model is attractive because it is:
 
-Initial exploratory analysis examined the structure of the dataset, missingness patterns, and relationships between borrower attributes and default probability.
+- straightforward to interpret
+- naturally probabilistic
+- well aligned with common credit-risk assumptions
+- stable when the underlying effects are mostly linear on the log-odds scale
 
-### Missing Data
+### 2. Hierarchical Bayesian Logistic Regression
 
-Several financial variables exhibit moderate missingness.
+The hierarchical version extends the baseline by allowing regional intercept variation:
 
-| Variable             | Missing Rate |
-| -------------------- | ------------ |
-| Upfront_charges      | ~27%         |
-| Interest_rate_spread | ~25%         |
-| rate_of_interest     | ~24%         |
-| dtir1                | ~16%         |
-| property_value       | ~10%         |
-| LTV                  | ~10%         |
+`P(default) = sigmoid(alpha_region + X beta)`
 
-Handling strategy:
+with region-level effects partially pooled around a global intercept. The intent is to capture baseline geographic variation without fully fitting separate models by region.
 
-* **Numeric variables:** median imputation
-* **Categorical variables:** missing category placeholder
+This is useful when regional market conditions may matter but the analyst still wants a shared model structure.
 
-This approach preserves the full dataset while allowing the models to learn patterns associated with missing information.
+### 3. Bayesian GAM
 
----
+The GAM replaces the simple linear numeric terms with spline expansions. This allows the model to capture nonlinear relationships more flexibly:
 
-### Feature Distributions
+`P(default) = sigmoid(alpha + f1(x1) + f2(x2) + ... )`
 
-Key numeric variables display several notable characteristics:
+In principle this can model curved effects in income, credit score, leverage, and debt burden. In practice it also expands the feature space substantially, which raises the complexity of inference.
 
-* **Loan amounts** are right-skewed with most loans between $150k–$400k.
-* **Borrower income** is strongly right-skewed with high-income outliers.
-* **Credit scores** span a wide range (~520–900).
-* **Loan-to-value ratios** cluster around typical mortgage leverage levels (60–90%).
+## Evaluation Framework
 
-These distributions indicate a **heterogeneous borrower population**, motivating the use of probabilistic models.
+The models are compared on multiple dimensions because credit scoring is not just a discrimination problem.
 
----
+| Metric | Why it matters |
+| --- | --- |
+| AUROC | Ranking ability across default / non-default cases |
+| PR-AUC | Performance on the default class when classes are imbalanced |
+| LogLoss | Quality of probabilistic predictions |
+| Brier score | Calibration of predicted probabilities |
+| Accuracy | Thresholded classification summary |
 
-### Relationships with Default Risk
+This combination gives a fuller picture. A model can rank borrowers reasonably well and still be poorly calibrated. In lending contexts, calibration matters because downstream decisions often depend on the actual probability estimate rather than only the rank order.
 
-Binned default rate analysis revealed several important patterns:
+## Results
 
-* **Higher interest rates → higher default risk**
-* **Higher loan-to-value ratios → sharply increasing risk at extreme leverage**
-* **Higher debt-to-income ratios → significantly higher default probability**
-* **Higher income → lower default risk**
+### Validation performance
 
-These patterns confirm that borrower financial variables carry meaningful predictive signal for default outcomes.
+| Model | AUROC | PR-AUC | LogLoss | Brier | Accuracy |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Bayesian Logistic | 0.7927 | 0.7115 | 0.3815 | 0.1164 | 0.8559 |
+| Hierarchical Logistic | 0.7764 | 0.6936 | 0.5170 | 0.1695 | 0.7573 |
+| Bayesian GAM | 0.5355 | 0.2459 | 1.1010 | 0.3438 | 0.4978 |
 
----
+### Test performance
 
-# Data Preparation
+| Model | AUROC | Brier | Accuracy |
+| --- | ---: | ---: | ---: |
+| Bayesian Logistic | 0.7951 | 0.1148 | 0.8584 |
+| Hierarchical Logistic | 0.7816 | 0.1690 | 0.7610 |
+| Bayesian GAM | 0.5290 | 0.3471 | 0.4914 |
 
-The dataset is partitioned into three subsets using stratified sampling to preserve the default rate.
+## Why the Bayesian Logistic Model Won
 
-| Dataset    | Percentage |
-| ---------- | ---------- |
-| Training   | 70%        |
-| Validation | 15%        |
-| Test       | 15%        |
+The Bayesian logistic regression model was selected as the final model because it delivered the best overall balance of:
 
-Preprocessing includes:
+- discrimination
+- calibration
+- stability
+- interpretability
 
-* Numeric feature standardization
-* Median imputation
-* One-hot encoding for categorical variables
-* Missing value sentinel categories
+The hierarchical model was reasonable but did not add enough predictive value to justify the extra complexity. That suggests borrower-level financial variables already explain most of the useful variation, and region-specific baseline adjustments only add limited signal.
 
-Separate **design matrices** are constructed for each model type.
+The Bayesian GAM underperformed badly. The most likely explanation is that spline expansion introduced too much flexibility relative to the signal available in the data. Instead of improving fit, that complexity weakened out-of-sample performance and calibration.
 
----
+## Analyst Explanation Engine
 
-# Modeling Approaches
+The final logistic model is paired with an interpretation layer that converts a score into an analyst-facing summary.
 
-## Bayesian Logistic Regression
+For a single borrower record, the workflow is:
 
-The Bayesian logistic regression model estimates default probability using a standard logistic regression structure with Bayesian priors.
+1. apply the saved preprocessing pipeline
+2. compute the posterior-mean linear predictor
+3. convert the log-odds to default probability
+4. assign a risk band
+5. decompose feature-level contributions
+6. aggregate encoded features back to raw business variables
+7. generate a natural-language explanation
 
-Model form:
+The risk bands are:
 
-P(default) = sigmoid(α + Xβ)
+| Probability | Risk band |
+| --- | --- |
+| `< 10%` | low |
+| `10% to <25%` | moderate |
+| `25% to <40%` | elevated |
+| `>= 40%` | high |
 
-Where:
+The explanation engine highlights both sides of the decision:
 
-* **X** = borrower feature matrix
-* **β** = regression coefficients
-* **α** = intercept
+- the strongest factors pushing risk upward
+- the strongest offsetting factors reducing risk
 
-This model is widely used in credit risk modeling because borrower financial variables often affect default risk in **predictable, monotonic ways**.
+That makes the final output easier to use in analyst review than a raw probability alone.
 
----
+## Project Components
 
-## Hierarchical Bayesian Logistic Regression
+| File | Purpose |
+| --- | --- |
+| `BML_Credit_Project.ipynb` | End-to-end notebook for EDA, preprocessing, model estimation, and interpretation logic |
+| `logit_app_bundle.pkl` | Saved preprocessing + coefficient bundle for inference |
+| `app.py` | Lightweight scoring interface for entering borrower values and receiving an analyst response |
+| `loan_desktop_app.py` | Desktop application variant kept in the repository |
+| `requirements.txt` | Runtime dependencies for the app |
 
-The hierarchical model extends the logistic regression framework by allowing **regional variation in baseline default risk**.
+## Main Takeaways
 
-P(default) = sigmoid(α_region + Xβ)
+- Default risk in this dataset is driven primarily by standard credit fundamentals: leverage, debt burden, pricing, income, and credit quality.
+- The simplest Bayesian model performed best because the main predictive relationships were already captured well by a linear log-odds structure.
+- More complex model classes do not automatically improve credit-risk performance.
+- Interpretability is strongest when modeling choices and explanation logic are aligned from the start.
 
-Where:
+## Conclusion
 
-α_region = α + σ_region * offset_region
-
-This allows the model to partially pool information across geographic regions and capture differences in economic conditions or housing markets.
-
----
-
-## Bayesian Generalized Additive Model (GAM)
-
-The GAM introduces **spline-based nonlinear transformations** for numeric variables.
-
-P(default) = sigmoid(α + f₁(x₁) + f₂(x₂) + ...)
-
-Where each function f(x) is modeled using spline basis expansions.
-
-This approach is designed to capture nonlinear relationships between predictors and default probability.
-
----
-
-# Model Evaluation
-
-Model performance was evaluated using multiple metrics that measure both discrimination and calibration.
-
-| Metric      | Description                                |
-| ----------- | ------------------------------------------ |
-| AUROC       | Ability to separate default vs non-default |
-| PR-AUC      | Precision-recall performance               |
-| LogLoss     | Probabilistic accuracy                     |
-| Brier Score | Calibration of predicted probabilities     |
-| Accuracy    | Classification performance                 |
-
----
-
-# Model Performance
-
-### Validation Performance
-
-| Model                 | AUROC      | PR-AUC     | LogLoss    | Brier      | Accuracy   |
-| --------------------- | ---------- | ---------- | ---------- | ---------- | ---------- |
-| **Bayesian Logistic** | **0.7927** | **0.7115** | **0.3815** | **0.1164** | **0.8559** |
-| Hierarchical Logistic | 0.7764     | 0.6936     | 0.5170     | 0.1695     | 0.7573     |
-| Bayesian GAM          | 0.5355     | 0.2459     | 1.1010     | 0.3438     | 0.4978     |
-
-### Test Performance
-
-| Model                 | AUROC      | Brier      | Accuracy   |
-| --------------------- | ---------- | ---------- | ---------- |
-| **Bayesian Logistic** | **0.7951** | **0.1148** | **0.8584** |
-| Hierarchical Logistic | 0.7816     | 0.1690     | 0.7610     |
-| Bayesian GAM          | 0.5290     | 0.3471     | 0.4914     |
-
----
-
-# Model Selection
-
-The **Bayesian Logistic Regression model performed best across all evaluation metrics**.
-
-Reasons:
-
-1. Highest AUROC and PR-AUC
-2. Lowest Brier score (best calibrated probabilities)
-3. Highest classification accuracy
-4. Stable performance across training, validation, and test datasets
-
-The hierarchical model performed slightly worse, suggesting that **regional variation did not significantly improve predictive performance** beyond borrower-level financial variables.
-
-The GAM model performed poorly due to the **high dimensionality introduced by spline expansions**, which likely led to unstable parameter estimation relative to the available signal in the dataset.
-
----
-
-# Final Model
-
-The final selected model is **Bayesian Logistic Regression**.
-
-This model offers the best balance between:
-
-* predictive performance
-* probabilistic calibration
-* interpretability
-
-These characteristics are essential for financial risk modeling where **transparent and reliable probability estimates are required**.
-
----
-
-# Analyst Explanation Engine
-
-To enhance interpretability, the project includes an **analyst explanation engine** that converts model predictions into natural-language explanations.
-
-For any borrower record, the system:
-
-1. Predicts default probability
-2. Assigns a risk classification
-3. Identifies the strongest drivers of risk
-4. Generates a human-readable explanation
-
-Example output:
-
-> The model predicts a default probability of **33.1%**, corresponding to an **elevated risk classification**.
-> The strongest factors increasing risk are **gender classification, regional location, and approval status**, while the strongest offsetting factors are **credit reporting type, security type, and occupancy status**.
-
-This functionality allows analysts to **understand why a borrower is considered higher or lower risk**, improving transparency and decision support.
-
----
-
-# Key Insights
-
-Several borrower characteristics strongly influence default probability:
-
-* **Debt-to-income ratio**
-* **Loan-to-value ratio**
-* **Interest rate**
-* **Borrower income**
-* **Credit score**
-
-These financial variables capture the borrower’s **repayment capacity and leverage**, which are fundamental determinants of credit risk.
-
-The results demonstrate that **relatively simple models with strong financial predictors can outperform more complex models** when the underlying relationships are mostly monotonic and well-behaved.
-
----
-
-# Technologies Used
-
-* Python
-* PyMC
-* ArviZ
-* Scikit-learn
-* NumPy
-* Pandas
-* Matplotlib
-
----
-
-# Repository Structure
-
-```
-BML_Credit_Project.ipynb
-README.md
-Loan_Default.csv
-```
-
----
-
-# Conclusion
-
-This project demonstrates how Bayesian modeling can be applied to credit risk prediction while maintaining **probabilistic rigor and interpretability**. The final Bayesian logistic regression model provides strong predictive performance and produces calibrated risk estimates that can support financial decision-making and risk management workflows.
-
----
-
-## Frontend App (Analyst Interpretation)
-
-A Streamlit app is included to serve as a lightweight frontend for the Bayesian logistic model bundle exported from the notebook.
-
-### Files
-
-- `streamlit_app.py`: JSON-based interface for scoring one or many borrowers
-- `app.py`: compatibility wrapper that forwards to `streamlit_app.py`
-- `logit_app_bundle.pkl`: model/preprocessing bundle used for scoring
-- `requirements.txt`: app dependencies
-
-### Run locally
-
-```bash
-pip install -r requirements.txt
-streamlit run streamlit_app.py
-```
-
-The app returns:
-
-1. Predicted default probability
-2. Risk band (`low`, `moderate`, `elevated`, `high`)
-3. Analyst-style interpretation sentence
-4. Variable-level contribution table (aggregated from model coefficients)
+This project demonstrates a full Bayesian credit-risk workflow: exploratory analysis, preprocessing, model comparison, probabilistic evaluation, model selection, and explanation generation. The final Bayesian logistic regression model provides the best combination of calibrated probabilities and practical interpretability, making it the most defensible choice for analyst-facing default risk assessment in this repository.
