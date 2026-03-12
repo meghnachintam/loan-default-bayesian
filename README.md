@@ -1,32 +1,25 @@
 # Bayesian Loan Default Risk Modeling
 
-## Use the uploaded `.pkl` model bundle for inference
+## Streamlit deployment
 
-If you already uploaded `logit_app_bundle.pkl`, you can score new records directly without re-training.
+This repository is configured to deploy with **`app.py` as the Streamlit entrypoint**.
 
-### Run in Streamlit
-
-1. Install dependencies:
+### Local run
 
 ```bash
 pip install -r requirements.txt
+streamlit run app.py
 ```
 
-2. Start the app from the repository root (same folder as `streamlit_app.py` and `logit_app_bundle.pkl`):
+### Streamlit Community Cloud
 
-```bash
-streamlit run streamlit_app.py
-```
+- **Main file path:** `app.py`
+- **Python runtime:** `python-3.11` (from `runtime.txt`)
+- Ensure `logit_app_bundle.pkl` is present in the repository root.
 
-Then paste a single JSON record or a JSON array of records in the app and click **Predict default probability**.
+## Use the uploaded `.pkl` model bundle for inference
 
-If Streamlit is not launching, the most common cause is missing dependencies (`streamlit`, `numpy`, `pandas`) or using an incompatible scikit-learn version.
-
-> **Important:** `logit_app_bundle.pkl` was serialized with scikit-learn `1.6.1`. If you see pickle/attribute errors while loading the model, install that exact version:
-
-```bash
-pip install scikit-learn==1.6.1
-```
+If you already uploaded `logit_app_bundle.pkl`, you can score new records directly without re-training.
 
 1. Create a JSON file with one record (object) or many records (array of objects).
 2. Run:
@@ -355,3 +348,29 @@ Loan_Default.csv
 # Conclusion
 
 This project demonstrates how Bayesian modeling can be applied to credit risk prediction while maintaining **probabilistic rigor and interpretability**. The final Bayesian logistic regression model provides strong predictive performance and produces calibrated risk estimates that can support financial decision-making and risk management workflows.
+
+---
+
+## Frontend App (Analyst Interpretation)
+
+A Streamlit app is included to serve as a lightweight frontend for the Bayesian logistic model bundle exported from the notebook.
+
+### Files
+
+- `app.py`: form-based interface for entering numeric/categorical borrower variables
+- `logit_app_bundle.pkl`: model/preprocessing bundle used for scoring
+- `requirements.txt`: app dependencies
+
+### Run locally
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+The app returns:
+
+1. Predicted default probability
+2. Risk band (`low`, `moderate`, `elevated`, `high`)
+3. Analyst-style interpretation sentence
+4. Variable-level contribution table (aggregated from model coefficients)

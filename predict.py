@@ -18,13 +18,7 @@ def _sigmoid(x: np.ndarray) -> np.ndarray:
 
 def load_bundle(bundle_path: Path) -> dict:
     with bundle_path.open("rb") as f:
-        try:
-            return pickle.load(f)
-        except AttributeError as exc:
-            raise RuntimeError(
-                "Failed to load model bundle. This bundle was trained with scikit-learn 1.6.1; "
-                "please install a compatible version (e.g. `pip install scikit-learn==1.6.1`)."
-            ) from exc
+        return pickle.load(f)
 
 
 def predict_default_probability(bundle: dict, records: list[dict]) -> list[float]:
