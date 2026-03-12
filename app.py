@@ -80,7 +80,24 @@ def feature_to_raw_var(feature_name: str) -> str:
     return feature_name
 
 
+
+
+def ensure_sklearn_pickle_compat() -> None:
+    """Patch missing private sklearn symbols required by older pickles."""
+    try:
+        from sklearn.compose import _column_transformer as ct_module
+    except Exception:
+        return
+
+    if not hasattr(ct_module, "_RemainderColsList"):
+        class _RemainderColsList(list):
+            pass
+
+        ct_module._RemainderColsList = _RemainderColsList
+
 def load_bundle(path: str = "logit_app_bundle.pkl"):
+    ensure_sklearn_pickle_compat()
+
     with open(path, "rb") as f:
         bundle = pickle.load(f)
 
