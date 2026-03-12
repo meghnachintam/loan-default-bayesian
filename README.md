@@ -1,5 +1,42 @@
 # Bayesian Loan Default Risk Modeling
 
+## Use the uploaded `.pkl` model bundle for inference
+
+If you already uploaded `logit_app_bundle.pkl`, you can score new records directly without re-training.
+
+### Run in Streamlit
+
+1. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+2. Start the app from the repository root (same folder as `streamlit_app.py` and `logit_app_bundle.pkl`):
+
+```bash
+streamlit run streamlit_app.py
+```
+
+Then paste a single JSON record or a JSON array of records in the app and click **Predict default probability**.
+
+If Streamlit is not launching, the most common cause is missing dependencies (`streamlit`, `numpy`, `pandas`) or using an incompatible scikit-learn version.
+
+> **Important:** `logit_app_bundle.pkl` was serialized with scikit-learn `1.6.1`. If you see pickle/attribute errors while loading the model, install that exact version:
+
+```bash
+pip install scikit-learn==1.6.1
+```
+
+1. Create a JSON file with one record (object) or many records (array of objects).
+2. Run:
+
+```bash
+python predict.py --bundle logit_app_bundle.pkl --input-json sample_input.json
+```
+
+The script prints `default_probability` values (between 0 and 1) in JSON format.
+
 ## Project Overview
 
 This project builds a **Bayesian machine learning pipeline to estimate loan default probability** using borrower financial characteristics and loan attributes. The objective is to generate **well-calibrated probabilistic risk estimates** and provide **interpretable explanations** that could support underwriting, portfolio monitoring, and credit risk management.
