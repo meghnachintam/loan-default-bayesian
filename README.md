@@ -79,6 +79,9 @@ Several variables show moderate missingness, concentrated mostly in financial fi
 
 That pattern matters because it argues for preprocessing instead of row deletion. Removing all incomplete records would unnecessarily shrink the dataset and potentially bias the sample toward cleaner applications.
 
+<img width="789" height="590" alt="image" src="https://github.com/user-attachments/assets/63347f47-abc0-48d8-b332-da62ec9cc945" />
+
+
 The EDA also showed the strongest practical relationships in the expected places:
 
 - higher interest rates aligned with higher default risk
