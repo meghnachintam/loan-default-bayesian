@@ -1,5 +1,22 @@
 # Bayesian Loan Default Risk Modeling
 
+## Streamlit deployment
+
+This repository is configured to deploy with **`app.py` as the Streamlit entrypoint**.
+
+### Local run
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+### Streamlit Community Cloud
+
+- **Main file path:** `app.py`
+- **Python runtime:** `python-3.11` (from `runtime.txt`)
+- Ensure `logit_app_bundle.pkl` is present in the repository root.
+
 ## Use the uploaded `.pkl` model bundle for inference
 
 If you already uploaded `logit_app_bundle.pkl`, you can score new records directly without re-training.
