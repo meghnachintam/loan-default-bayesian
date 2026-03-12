@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import streamlit as st
+from scipy import sparse
 
 st.set_page_config(page_title="Bayesian Loan Default Analyst", layout="wide")
 
@@ -79,7 +80,24 @@ def feature_to_raw_var(feature_name: str) -> str:
     return feature_name
 
 
+
+
+def ensure_sklearn_pickle_compat() -> None:
+    """Patch missing private sklearn symbols required by older pickles."""
+    try:
+        from sklearn.compose import _column_transformer as ct_module
+    except Exception:
+        return
+
+    if not hasattr(ct_module, "_RemainderColsList"):
+        class _RemainderColsList(list):
+            pass
+
+        ct_module._RemainderColsList = _RemainderColsList
+
 def load_bundle(path: str = "logit_app_bundle.pkl"):
+    ensure_sklearn_pickle_compat()
+
     with open(path, "rb") as f:
         bundle = pickle.load(f)
 
@@ -110,6 +128,12 @@ def load_bundle(path: str = "logit_app_bundle.pkl"):
     return preprocess, np.asarray(beta_mean), float(intercept_mean), feature_names, training_columns
 
 
+def _to_1d_dense_array(values) -> np.ndarray:
+    if sparse.issparse(values):
+        return values.toarray().reshape(-1)
+    return np.asarray(values).reshape(-1)
+
+
 def score_row(raw_row: dict):
     row_df = pd.DataFrame([raw_row])
 
@@ -121,9 +145,9 @@ def score_row(raw_row: dict):
     X_row = PREPROCESS.transform(row_df)
 
     eta = INTERCEPT_MEAN + X_row @ BETA_MEAN
-    prob = 1 / (1 + np.exp(-eta))
+    prob = 1 / (1 + np.exp(-_to_1d_dense_array(eta)))
 
-    contrib = X_row.flatten() * BETA_MEAN
+    contrib = _to_1d_dense_array(X_row) * BETA_MEAN
     contrib_df = pd.DataFrame({"feature": FEATURE_NAMES, "contribution": contrib})
     contrib_df["variable"] = contrib_df["feature"].apply(feature_to_raw_var)
     contrib_df = (
