@@ -2,18 +2,18 @@
 
 ## Streamlit deployment
 
-This repository is configured to deploy with **`app.py` as the Streamlit entrypoint**.
+This repository is configured to deploy with **`streamlit_app.py` as the Streamlit entrypoint** (with `app.py` kept as a compatibility wrapper).
 
 ### Local run
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
 
 ### Streamlit Community Cloud
 
-- **Main file path:** `app.py`
+- **Main file path:** `streamlit_app.py`
 - **Python runtime:** `python-3.11` (from `runtime.txt`)
 - Ensure `logit_app_bundle.pkl` is present in the repository root.
 
@@ -357,7 +357,8 @@ A Streamlit app is included to serve as a lightweight frontend for the Bayesian 
 
 ### Files
 
-- `app.py`: form-based interface for entering numeric/categorical borrower variables
+- `streamlit_app.py`: JSON-based interface for scoring one or many borrowers
+- `app.py`: compatibility wrapper that forwards to `streamlit_app.py`
 - `logit_app_bundle.pkl`: model/preprocessing bundle used for scoring
 - `requirements.txt`: app dependencies
 
@@ -365,7 +366,7 @@ A Streamlit app is included to serve as a lightweight frontend for the Bayesian 
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
 
 The app returns:
