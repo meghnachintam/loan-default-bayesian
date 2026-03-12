@@ -8,6 +8,8 @@ from scipy import sparse
 
 st.set_page_config(page_title="Bayesian Loan Default Analyst", layout="wide")
 
+APP_DIR = Path(__file__).resolve().parent
+
 NUM_COLS = [
     "loan_amount",
     "rate_of_interest",
@@ -43,6 +45,16 @@ def risk_label(prob: float) -> str:
     if prob < 0.40:
         return "elevated"
     return "high"
+
+
+def risk_color(prob: float) -> str:
+    if prob < 0.10:
+        return "#2e7d32"
+    if prob < 0.25:
+        return "#f9a825"
+    if prob < 0.40:
+        return "#ef6c00"
+    return "#c62828"
 
 
 def pretty_var_name(v: str) -> str:
@@ -176,10 +188,36 @@ def build_statement(prob: float, contributions: pd.DataFrame, top_n: int = 3):
     return statement
 
 
-st.title("Bayesian Loan Default Analyst Frontend")
-st.caption("Input borrower/loan variables and get probability + analyst interpretation based on the notebook model bundle.")
+def render_risk_badge(prob: float) -> None:
+    pct = prob * 100
+    color = risk_color(prob)
+    label = risk_label(prob).title()
+    st.markdown(
+        f"""
+        <div style="
+            border-radius: 14px;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, {color}22, #f8f9fa);
+            border: 1px solid {color}66;
+            margin-bottom: 16px;
+        ">
+            <div style="font-size: 0.85rem; color: #5f6368; letter-spacing: 0.02em;">DEFAULT RISK SCORE</div>
+            <div style="display:flex; align-items:end; gap:10px; margin-top:4px;">
+                <div style="font-size: 2rem; font-weight: 700; color: {color};">{pct:.2f}%</div>
+                <div style="font-size: 1rem; font-weight: 600; color: {color}; padding-bottom: 5px;">{label}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-bundle_path = Path("logit_app_bundle.pkl")
+
+st.title("🏦 Bayesian Loan Default Analyst")
+st.caption(
+    "Input borrower and loan details, then get an estimated default probability with a plain-language explanation."
+)
+
+bundle_path = APP_DIR / "logit_app_bundle.pkl"
 if not bundle_path.exists():
     st.error("`logit_app_bundle.pkl` not found in repository root.")
     st.stop()
@@ -199,15 +237,17 @@ if TRAINING_COLUMNS:
     st.info(f"Model was trained with {len(TRAINING_COLUMNS)} raw columns.")
 
 with st.form("loan_input"):
-    st.subheader("Numeric inputs")
+    st.subheader("1) Numeric Inputs")
+    st.caption("Use realistic values from the application. All numeric features are required for scoring.")
     n1, n2 = st.columns(2)
     numeric_values = {}
     for idx, col in enumerate(NUM_COLS):
         target_col = n1 if idx % 2 == 0 else n2
         with target_col:
-            numeric_values[col] = st.number_input(pretty_var_name(col).title(), value=0.0)
+            numeric_values[col] = st.number_input(pretty_var_name(col).title(), value=0.0, format="%.4f")
 
-    st.subheader("Categorical inputs")
+    st.subheader("2) Categorical Inputs")
+    st.caption("Enter category labels matching model training values when possible (e.g., Region, loan purpose).")
     c1, c2 = st.columns(2)
     categorical_values = {}
     for idx, col in enumerate(CAT_COLS):
@@ -216,19 +256,19 @@ with st.form("loan_input"):
             categorical_values[col] = st.text_input(pretty_var_name(col).title(), value="")
 
     top_n = st.slider("Top factors in interpretation", min_value=1, max_value=10, value=3)
-    submitted = st.form_submit_button("Score borrower")
+    submitted = st.form_submit_button("🔍 Score Borrower")
 
 if submitted:
     payload = {**numeric_values, **categorical_values}
     prob, contributions = score_row(payload)
 
-    st.metric("Default Probability", f"{prob * 100:.2f}%")
-    st.metric("Risk Band", risk_label(prob).title())
+    render_risk_badge(prob)
+    st.progress(min(max(prob, 0.0), 1.0), text=f"Estimated default probability: {prob * 100:.2f}%")
 
-    st.markdown("### Analyst interpretation")
+    st.markdown("### 🧠 Analyst Interpretation")
     st.write(build_statement(prob, contributions, top_n=top_n))
 
-    st.markdown("### Variable contribution table")
+    st.markdown("### 📊 Variable Contribution Table")
     show_df = contributions[["variable", "contribution"]].copy()
     show_df["variable"] = show_df["variable"].map(pretty_var_name)
-    st.dataframe(show_df, use_container_width=True)
+    st.dataframe(show_df, width="stretch")
