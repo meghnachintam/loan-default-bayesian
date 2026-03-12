@@ -318,3 +318,29 @@ Loan_Default.csv
 # Conclusion
 
 This project demonstrates how Bayesian modeling can be applied to credit risk prediction while maintaining **probabilistic rigor and interpretability**. The final Bayesian logistic regression model provides strong predictive performance and produces calibrated risk estimates that can support financial decision-making and risk management workflows.
+
+---
+
+## Frontend App (Analyst Interpretation)
+
+A Streamlit app is included to serve as a lightweight frontend for the Bayesian logistic model bundle exported from the notebook.
+
+### Files
+
+- `app.py`: form-based interface for entering numeric/categorical borrower variables
+- `logit_app_bundle.pkl`: model/preprocessing bundle used for scoring
+- `requirements.txt`: app dependencies
+
+### Run locally
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+The app returns:
+
+1. Predicted default probability
+2. Risk band (`low`, `moderate`, `elevated`, `high`)
+3. Analyst-style interpretation sentence
+4. Variable-level contribution table (aggregated from model coefficients)
