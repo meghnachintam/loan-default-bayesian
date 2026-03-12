@@ -1,5 +1,18 @@
 # Bayesian Loan Default Risk Modeling
 
+## Use the uploaded `.pkl` model bundle for inference
+
+If you already uploaded `logit_app_bundle.pkl`, you can score new records directly without re-training.
+
+1. Create a JSON file with one record (object) or many records (array of objects).
+2. Run:
+
+```bash
+python predict.py --bundle logit_app_bundle.pkl --input-json sample_input.json
+```
+
+The script prints `default_probability` values (between 0 and 1) in JSON format.
+
 ## Project Overview
 
 This project builds a **Bayesian machine learning pipeline to estimate loan default probability** using borrower financial characteristics and loan attributes. The objective is to generate **well-calibrated probabilistic risk estimates** and provide **interpretable explanations** that could support underwriting, portfolio monitoring, and credit risk management.
