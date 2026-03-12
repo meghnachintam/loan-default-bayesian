@@ -12,11 +12,26 @@ import numpy as np
 import pandas as pd
 
 
+def ensure_sklearn_pickle_compat() -> None:
+    """Patch private sklearn symbols required by older serialized bundles."""
+    try:
+        from sklearn.compose import _column_transformer as ct_module
+    except Exception:
+        return
+
+    if not hasattr(ct_module, "_RemainderColsList"):
+        class _RemainderColsList(list):
+            pass
+
+        ct_module._RemainderColsList = _RemainderColsList
+
+
 def _sigmoid(x: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-x))
 
 
 def load_bundle(bundle_path: Path) -> dict:
+    ensure_sklearn_pickle_compat()
     with bundle_path.open("rb") as f:
         return pickle.load(f)
 
